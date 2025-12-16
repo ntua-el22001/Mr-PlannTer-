@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'settings_screen.dart'; 
 import 'new_task_screen.dart'; 
-import 'new_deadline_screen.dart';
 
-// Enum για τη διαχείριση των τριών διαφορετικών προβολών
 enum CalendarView { today, month, calendar }
 
 class CalendarScreen extends StatefulWidget {
@@ -15,34 +13,24 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  //  State Variables για το Ημερολόγιο 
   final CalendarFormat _calendarFormat = CalendarFormat.month; 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
-  
-  // Κατάσταση: Ποια προβολή είναι ενεργή (ξεκινάμε με Today)
   CalendarView _currentView = CalendarView.today; 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // Φόντο Ουρανού 
         color: Colors.lightBlue.shade200, 
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // HEADER (Settings Button)
               _buildHeader(context),
-              
-              // VIEW SWITCHER (Today/Month/Calendar)
               _buildViewSwitcher(),
-              
-              
               _buildCurrentViewContent(),
-
-              const SizedBox(height: 100), // Κενό στο τέλος για να φαίνεται το περιεχόμενο
+              const SizedBox(height: 100), 
             ],
           ),
         ),
@@ -50,12 +38,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
   
-  //  Μέθοδος για Δυναμική Αλλαγή Περιεχομένου 
-  
   Widget _buildCurrentViewContent() {
     switch (_currentView) {
       case CalendarView.today:
-        // Προβολή Calendar 1 (Σημερινά Tasks/Deadlines)
         return Column(
           children: [
             _buildTodayInfo(),
@@ -63,10 +48,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ],
         );
       case CalendarView.month:
-        // Προβολή Calendar 2 (Ημερήσια προβολή με ώρες)
         return _buildMonthlyView();
       case CalendarView.calendar:
-        // Προβολή Calendar 3 (Ολοκληρωμένο widget ημερολογίου)
         return Column(
           children: [
             _buildCalendarWidget(),
@@ -76,7 +59,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
-  //  HEADER 
+  //  Header and Switcher
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
@@ -94,8 +77,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
     );
   }
-
-  //  VIEW SWITCHER 
 
   Widget _buildViewSwitcher() {
     return Padding(
@@ -117,41 +98,33 @@ class _CalendarScreenState extends State<CalendarScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: TextButton(
         onPressed: () {
-          setState(() {
-            _currentView = view; // Αλλαγή προβολής
-          });
+          setState(() => _currentView = view);
         },
         style: TextButton.styleFrom(
           backgroundColor: isSelected ? Colors.black : Colors.transparent,
           side: const BorderSide(color: Colors.black),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
-        child: Text(
-          text,
-          style: TextStyle(color: isSelected ? Colors.white : Colors.black),
-        ),
+        child: Text(text, style: TextStyle(color: isSelected ? Colors.white : Colors.black)),
       ),
     );
   }
 
-  //  TODAY VIEW CONTENT (Calendar 1)
+  // Today View
+  
   Widget _buildTodayInfo() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10),
-      // Κεντρικό Container 
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.blue.shade100, // Ανοιχτό μπλε
+          color: Colors.blue.shade100, 
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Ημέρα της εβδομάδας
             const Text('Tuesday', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-            
-            // Ημερομηνία & Μήνας 
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -161,12 +134,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'DEC', // Ή τον τρέχοντα μήνα
+                  'DEC', 
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.blue.shade700),
                 ),
                 const Spacer(),
-                
-                // Ώρες/Τοποθεσίες 
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -185,14 +156,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-
   Widget _buildTodayTasks() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Tasks / Reminders
           Padding(
             padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
             child: Row(
@@ -213,14 +182,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           
-          //  Study Session 
           Container(
             padding: const EdgeInsets.all(16),
             margin: const EdgeInsets.symmetric(vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.yellow.shade400, // Κίτρινο
-              borderRadius: BorderRadius.circular(15),
-            ),
+            decoration: BoxDecoration(color: Colors.yellow.shade400, borderRadius: BorderRadius.circular(15)),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -230,7 +195,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('5:00 PM Start', style: TextStyle(fontSize: 14)),
-                    // 30 Min Tag
                     Chip(
                       label: Text('30 Min', style: TextStyle(color: Colors.black, fontSize: 10)),
                       backgroundColor: Colors.white,
@@ -242,14 +206,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
 
-          //  Deadline 
           Container(
             padding: const EdgeInsets.all(16),
             margin: const EdgeInsets.symmetric(vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade400, // Πορτοκαλί
-              borderRadius: BorderRadius.circular(15),
-            ),
+            decoration: BoxDecoration(color: Colors.orange.shade400, borderRadius: BorderRadius.circular(15)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -272,7 +232,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  //  MONTH VIEW CONTENT (Calendar 2)
+  // Month View
 
   Widget _buildMonthlyView() {
     return Column(
@@ -281,10 +241,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.yellow.shade400,
-              borderRadius: BorderRadius.circular(15),
-            ),
+            decoration: BoxDecoration(color: Colors.yellow.shade400, borderRadius: BorderRadius.circular(15)),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -298,10 +255,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
         ),
         
-        // Λίστα με τις ημέρες/ώρες (Calendar 2) 
         Column( 
           children: [
-            // Προσθέτουμε αρκετές ημέρες για να δείξουμε το scroll
             _buildDailySchedule('Tuesday', 10, Colors.yellow.shade300),
             _buildDailySchedule('Wednesday', 11, Colors.red.shade300),
             _buildDailySchedule('Thursday', 12, Colors.green.shade300),
@@ -319,10 +274,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(15),
-        ),
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(15)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -354,7 +306,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 title: const Text('Add New Task'),
                 onTap: () {
                   Navigator.pop(bc); 
-                  Navigator.push(context, MaterialPageRoute(builder: (c) => const NewTaskScreen()));
+                  // Καλούμε το NewTaskScreen με type='task'
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => const NewTaskScreen(initialType: 'task')));
                 },
               ),
               ListTile(
@@ -362,7 +315,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 title: const Text('Add New Deadline'),
                 onTap: () {
                   Navigator.pop(bc);
-                  Navigator.push(context, MaterialPageRoute(builder: (c) => const NewDeadlineScreen()));
+                  // Καλούμε το NewTaskScreen με type='deadline'
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => const NewTaskScreen(initialType: 'deadline')));
                 },
               ),
             ],
@@ -371,12 +325,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
       );
     }
 
-    //  Layout του Time Slot
     return Column(
       children: [
         Text(start, style: const TextStyle(fontSize: 10)),
-        GestureDetector( // Χρησιμοποιούμε GestureDetector για να είναι πατητό
-          onTap: showAddEventDialog, // Ενεργοποιούμε το modal με το tap
+        GestureDetector( 
+          onTap: showAddEventDialog,
           child: Container(
             height: 50,
             width: 50,
@@ -392,25 +345,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
-  //  CALENDAR VIEW CONTENT (Calendar 3) 
+  // Calendar View
 
   Widget _buildCalendarWidget() {
-    // Το βασικό widget ημερολογίου
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Container(
-        decoration: BoxDecoration(
-          color: Colors.yellow.shade300,
-          borderRadius: BorderRadius.circular(15),
-        ),
+        decoration: BoxDecoration(color: Colors.yellow.shade300, borderRadius: BorderRadius.circular(15)),
         child: TableCalendar(
           firstDay: DateTime.utc(2020, 1, 1),
           lastDay: DateTime.utc(2030, 12, 31),
           focusedDay: _focusedDay,
           calendarFormat: _calendarFormat,
-          selectedDayPredicate: (day) {
-            return isSameDay(_selectedDay, day);
-          },
+          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
           onDaySelected: (selectedDay, focusedDay) {
             if (!isSameDay(_selectedDay, selectedDay)) {
               setState(() {
@@ -444,7 +391,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
         padding: const EdgeInsets.only(top: 20, bottom: 20),
         child: TextButton.icon(
           onPressed: () {
-            // Εδώ θα γίνει η κλήση του API για Google Calendar Sync 
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Attempting Google Calendar Sync...')),
             );

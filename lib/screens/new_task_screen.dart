@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../data/database_helper.dart';
 
 class NewTaskScreen extends StatefulWidget {
-  const NewTaskScreen({super.key});
+  final String initialType; // 'task' or 'deadline'
+  const NewTaskScreen({super.key, required this.initialType});
 
   @override
   State<NewTaskScreen> createState() => _NewTaskScreenState();
@@ -9,194 +11,291 @@ class NewTaskScreen extends StatefulWidget {
 
 class _NewTaskScreenState extends State<NewTaskScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _frequencyController = TextEditingController();
-  final TextEditingController _durationController = TextEditingController();
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+
+  // Πεδία μόνο για Tasks
+  final _freqController = TextEditingController();
+  final _durController = TextEditingController();
+
+  late String _type;
+  int _importance = 1; 
   
-  // State variables για το scheduling
-  DateTime? _planDate;
-  TimeOfDay? _planTime;
-  
+  // Date/Time
+  final _dateController = TextEditingController();
+  final _timeController = TextEditingController();
+  DateTime _selectedDate = DateTime.now();
+  TimeOfDay _selectedTime = TimeOfDay.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType;
+    _dateController.text = "${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}";
+    _timeController.text = "${_selectedTime.hour.toString().padLeft(2,'0')}:${_selectedTime.minute.toString().padLeft(2,'0')}";
+  }
+
   @override
   void dispose() {
     _titleController.dispose();
-    _descriptionController.dispose();
-    _frequencyController.dispose();
-    _durationController.dispose();
+    _descController.dispose();
+    _freqController.dispose();
+    _durController.dispose();
+    _dateController.dispose();
+    _timeController.dispose();
     super.dispose();
   }
 
-  
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _planDate ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null && picked != _planDate) {
+  Future<void> _pickDate() async {
+    final d = await showDatePicker(
+        context: context, initialDate: _selectedDate, 
+        firstDate: DateTime(2020), lastDate: DateTime(2030));
+    if (d != null) {
       setState(() {
-        _planDate = picked;
+        _selectedDate = d;
+        _dateController.text = "${d.day}/${d.month}/${d.year}";
       });
     }
   }
 
-  Future<void> _selectTime(BuildContext context) async {
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: _planTime ?? TimeOfDay.now(),
-    );
-    if (picked != null && picked != _planTime) {
+  Future<void> _pickTime() async {
+    final t = await showTimePicker(context: context, initialTime: _selectedTime);
+    if (t != null) {
       setState(() {
-        _planTime = picked;
+        _selectedTime = t;
+        _timeController.text = "${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}";
       });
     }
   }
-  
-  void _saveTask() {
+
+  void _save() async {
+    // Έλεγχος εγκυρότητας (Validation)
     if (_formKey.currentState!.validate()) {
-      debugPrint('New Task Saved!');
-      debugPrint('Title: ${_titleController.text}');
-      debugPrint('Frequency: ${_frequencyController.text}');
-      debugPrint('Duration: ${_durationController.text} minutes');
-      
-      Navigator.pop(context); // Επιστροφή
+      try {
+        final newTask = {
+          'title': _titleController.text,
+          'description': _descController.text,
+          'type': _type,
+          'is_completed': 0,
+          'frequency': _type == 'task' ? _freqController.text : '',
+          'duration': int.tryParse(_durController.text) ?? 30,
+          'importance': _importance,
+          'scheduled_date': _selectedDate.toIso8601String().split('T')[0],
+          'scheduled_time': "${_selectedTime.hour.toString().padLeft(2,'0')}:${_selectedTime.minute.toString().padLeft(2,'0')}",
+        };
+        
+        // Προσπάθεια αποθήκευσης
+        await DatabaseHelper().insertTask(newTask);
+        
+        // Αν όλα πήγαν καλά, κλείσε το παράθυρο
+        if (mounted) Navigator.pop(context, true); 
+        
+      } catch (e) {
+        // Αν υπάρξει σφάλμα (π.χ. βάσης δεδομένων), εμφάνισέ το
+        debugPrint("Database Error: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error saving: $e"), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } else {
+      // Μήνυμα αν λείπει ο τίτλος
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please enter a Title!"),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isTask = _type == 'task';
+    final title = isTask ? "New Task" : "New Deadline";
+
     return Scaffold(
-      body: Container(
-        color: Colors.lightBlue.shade200, 
+      backgroundColor: Colors.lightBlue.shade200,
+      resizeToAvoidBottomInset: true,
+      
+      body: SafeArea(
         child: Stack(
+          alignment: Alignment.center,
           children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.only(top: 80, left: 20, right: 20, bottom: 100),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.yellow.shade300,
-                  borderRadius: BorderRadius.circular(15),
+            // Close Button (X)
+            Positioned(
+              top: 20,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(width: 2.5),
+                    color: Colors.lightBlue.shade200, 
+                  ),
+                  child: const Icon(Icons.close, size: 30, fontWeight: FontWeight.bold),
                 ),
+              ),
+            ),
+
+            // Main Yellow Container
+            Positioned(
+              top: 80,
+              bottom: 0,
+              left: 20,
+              right: 20,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 80), 
                 padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE082),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
                 child: Form(
                   key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      const Text('New Task', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 20),
-
-                      // Title Field
-                      _buildTextField(_titleController, 'Title', isRequired: true),
-                      // Description Field
-                      _buildTextField(_descriptionController, 'Description', maxLines: 3),
-
+                  child: ListView(
+                    children: [
+                      Center(child: Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
                       const SizedBox(height: 15),
 
-                      // Frequency & Duration
-                      _buildRowFields(
-                        _frequencyController, 'Frequency (days/week)', 
-                        _durationController, 'Duration (minutes)',
+                      _buildCustomField(_titleController, "Title", 1, isRequired: true),
+                      const SizedBox(height: 10),
+
+                      _buildCustomField(_descController, "Description", 4),
+                      const SizedBox(height: 10),
+
+                      if (isTask) ...[
+                        Row(
+                          children: [
+                            Expanded(child: Text("Frequency (days/week)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))),
+                            const SizedBox(width: 10),
+                            SizedBox(width: 60, child: _buildCustomField(_freqController, "", 1)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(child: Text("Duration (minutes)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))),
+                            const SizedBox(width: 10),
+                            SizedBox(width: 60, child: _buildCustomField(_durController, "", 1)),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      Text("Importance", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
+                      const SizedBox(height: 5),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(5, (index) {
+                          return GestureDetector(
+                            onTap: () => setState(() => _importance = index + 1),
+                            child: Container(
+                              width: 40, height: 25,
+                              decoration: BoxDecoration(
+                                color: _importance > index ? Colors.white : Colors.transparent,
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(color: Colors.black),
+                              ),
+                            ),
+                          );
+                        }),
                       ),
+                      const SizedBox(height: 15),
+
+                      Text(isTask ? "Plan your task:" : "Date & Time", style: const TextStyle(fontSize: 12)),
+                      const SizedBox(height: 5),
                       
-                      const SizedBox(height: 20),
-                      
-                      // Plan task (Date/Time)
-                      const Text('Plan your task:', style: TextStyle(fontWeight: FontWeight.bold)),
-                      _buildDateTimeRow('Date', 
-                        _planDate == null ? 'Select Date' : '${_planDate!.day}/${_planDate!.month}/${_planDate!.year}',
-                        Icons.calendar_today, () => _selectDate(context)),
-                      
-                      _buildDateTimeRow('Time', 
-                        _planTime == null ? 'Select Time' : _planTime!.format(context),
-                        Icons.access_time, () => _selectTime(context)),
+                      Row(
+                        children: [
+                          const Text("Date ", style: TextStyle(fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: _pickDate,
+                              child: AbsorbPointer(
+                                child: _buildCustomField(_dateController, "DD/MM/YYYY", 1),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Text("Time ", style: TextStyle(fontWeight: FontWeight.bold)),
+                          SizedBox(
+                            width: 100,
+                            child: GestureDetector(
+                              onTap: _pickTime,
+                              child: AbsorbPointer(
+                                child: _buildCustomField(_timeController, "HH:MM", 1),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
-            
-            // X-Button (Κλείσιμο)
-            Positioned(
-              top: 40,
-              left: 10,
-              child: IconButton(
-                icon: const Icon(Icons.close, size: 40, color: Colors.black),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            
-            // Checkmark Button
-            Positioned(
-              bottom: 30,
-              right: 20,
-              child: FloatingActionButton(
-                onPressed: _saveTask,
-                backgroundColor: Colors.lightGreen,
-                child: const Icon(Icons.check, size: 30, color: Colors.white),
-              ),
-            ),
           ],
         ),
       ),
-    );
-  }
+      
 
-  // Βοηθητικό Widget για TextField 
-  Widget _buildTextField(TextEditingController controller, String label, {int maxLines = 1, bool isRequired = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          fillColor: Colors.white,
-          filled: true,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 20), 
+        child: SizedBox(
+          width: 70, 
+          height: 70,
+          child: FloatingActionButton(
+            onPressed: _save,
+            backgroundColor: Colors.transparent, 
+            elevation: 0, // Αφαιρούμε τη σκιά
+            shape: const CircleBorder(), // Σιγουρεύουμε ότι είναι κύκλος
+            child: Container(
+              width: 70, height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white, // Χρώμα γεμίσματος για να πιάνει το κλικ
+                border: Border.all(width: 3, color: Colors.black), // Μαύρο περίγραμμα
+              ),
+              child: const Icon(Icons.check, size: 40, color: Colors.black),
+            ),
+          ),
         ),
-        validator: (value) {
-          if (isRequired && (value == null || value.isEmpty)) {
-            return 'Please enter $label';
-          }
-          return null;
-        },
       ),
     );
   }
-  
-  // Βοηθητικό Widget για Row Fields (Frequency & Duration)
-  Widget _buildRowFields(TextEditingController freqController, String freqLabel, TextEditingController durController, String durLabel) {
-    return Row(
-      children: [
-        Expanded(child: _buildTextField(freqController, freqLabel)),
-        const SizedBox(width: 10),
-        Expanded(child: _buildTextField(durController, durLabel, isRequired: true)),
-      ],
-    );
-  }
 
-  // Βοηθητικό Widget για Date/Time Input 
-  Widget _buildDateTimeRow(String label, String value, IconData icon, VoidCallback onTap) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold)),
-          GestureDetector(
-            onTap: onTap,
-            child: Row(
-              children: [
-                Icon(icon, color: Colors.blue),
-                const SizedBox(width: 8),
-                Text(value, style: const TextStyle(decoration: TextDecoration.underline, color: Colors.blue)),
-              ],
-            ),
-          ),
-        ],
+  Widget _buildCustomField(TextEditingController controller, String hint, int lines, {bool isRequired = false}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.black),
+      ),
+      child: TextFormField(
+        controller: controller,
+        maxLines: lines,
+        validator: (v) {
+          if (isRequired && (v == null || v.isEmpty)) {
+            return "Required"; 
+          }
+          return null;
+        },
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+          contentPadding: const EdgeInsets.all(10),
+          border: InputBorder.none,
+        ),
       ),
     );
   }

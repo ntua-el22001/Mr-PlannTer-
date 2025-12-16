@@ -28,17 +28,24 @@ class DatabaseHelper {
   }
 
   void _onCreate(Database db, int version) async {
-    // Tasks
+    // Πίνακας για Tasks (Εργασίες και Deadlines)
     await db.execute('''
       CREATE TABLE tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT, description TEXT, type TEXT, is_completed INTEGER, 
-        frequency TEXT, duration INTEGER, importance INTEGER, 
-        scheduled_date TEXT, scheduled_time TEXT, google_event_id TEXT
+        title TEXT, 
+        description TEXT, 
+        type TEXT, 
+        is_completed INTEGER, 
+        frequency TEXT, 
+        duration INTEGER, 
+        importance INTEGER, 
+        scheduled_date TEXT, 
+        scheduled_time TEXT, 
+        google_event_id TEXT
       )
     ''');
     
-    //  Current Plant State
+    // Πίνακας για την τρέχουσα κατάσταση του φυτού (Timer)
     await db.execute('''
       CREATE TABLE plant_state (
         id INTEGER PRIMARY KEY,
@@ -46,9 +53,10 @@ class DatabaseHelper {
         total_study_time INTEGER 
       )
     ''');
+    // Αρχικοποίηση με μηδενικές τιμές
     await db.insert('plant_state', {'id': 1, 'current_stage': 0, 'total_study_time': 0});
 
-    // Completed Plants (Album)
+    // Πίνακας για τα Ολοκληρωμένα Φυτά (Άλμπουμ) 
     await db.execute('''
       CREATE TABLE completed_plants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,8 +67,8 @@ class DatabaseHelper {
     ''');
   }
 
-  // Handle updates if app is already installed
   void _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Αν αναβαθμιστεί η βάση, φτιάχνουμε τον πίνακα αν δεν υπάρχει
     if (oldVersion < 2) {
       await db.execute('''
         CREATE TABLE completed_plants (
@@ -76,12 +84,22 @@ class DatabaseHelper {
 
   Future<int> insertTask(Map<String, dynamic> row) async {
     final db = await database;
-    return db.insert('tasks', row);
+    return await db.insert('tasks', row);
   }
 
   Future<List<Map<String, dynamic>>> queryAllTasks() async {
     final db = await database;
-    return db.query('tasks', orderBy: 'scheduled_date ASC');
+    return await db.query('tasks', orderBy: 'scheduled_date ASC');
+  }
+
+  Future<int> updateTaskCompletion(int id, int isCompleted) async {
+    final db = await database;
+    return await db.update(
+      'tasks',
+      {'is_completed': isCompleted},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<int> updatePlantState(int newStage, int totalStudyMinutes) async {
@@ -103,7 +121,7 @@ class DatabaseHelper {
   }
 
 
-  // Προσθήκη ολοκληρωμένου φυτού στο άλμπουμ
+  // Προσθήκη ενός ολοκληρωμένου φυτού στο ιστορικό
   Future<int> addCompletedPlant(String imagePath, String name) async {
     final db = await database;
     return await db.insert('completed_plants', {
@@ -113,9 +131,10 @@ class DatabaseHelper {
     });
   }
 
-  // Λήψη όλων των φυτών για το άλμπουμ
+  // Ανάκτηση όλων των ολοκληρωμένων φυτών
   Future<List<Map<String, dynamic>>> getCompletedPlants() async {
     final db = await database;
+    // Τα φέρνουμε με σειρά από το πιο πρόσφατο προς το παλιότερο
     return await db.query('completed_plants', orderBy: 'completion_date DESC');
   }
 }

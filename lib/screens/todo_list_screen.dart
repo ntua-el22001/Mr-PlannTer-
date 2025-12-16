@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-
-import 'settings_screen.dart'; 
+import '../data/database_helper.dart';
+import 'settings_screen.dart';
 import 'new_task_screen.dart';
-import 'new_deadline_screen.dart';
 
 class TodoListScreen extends StatefulWidget {
   const TodoListScreen({super.key});
@@ -12,176 +11,273 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen> {
-  final List<String> tasks = ['Study Session - Algebra (45m)', 'Review HCI Notes', 'Gym'];
-  final List<String> deadlines = ['HCI Project Deadline (23:59)', 'Math Exam (13 Dec)'];
+  List<Map<String, dynamic>> _allTasks = [];
+  bool _isLoading = true;
+  
+  // false = Tasks Tab, true = Deadlines Tab
+  bool _showDeadlines = false; 
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTaskList();
+  }
+
+  // Φόρτωση δεδομένων από τη βάση
+  Future<void> _refreshTaskList() async {
+    try {
+      final data = await DatabaseHelper().queryAllTasks();
+      if (mounted) {
+        setState(() {
+          _allTasks = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading tasks: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Check/Uncheck εργασίας
+  void _toggleTaskCompletion(int id, int currentStatus) async {
+    final newStatus = currentStatus == 0 ? 1 : 0;
+    await DatabaseHelper().updateTaskCompletion(id, newStatus);
+    _refreshTaskList();
+  }
+
+  // Πλοήγηση στην οθόνη προσθήκης και αυτόματη αλλαγή TAB
+  void _navigateToAdd(String type) async {
+    // Πηγαίνουμε στη φόρμα και περιμένουμε να επιστρέψει
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NewTaskScreen(initialType: type),
+      ),
+    );
+
+    // Αν επιστρέψει true (δηλαδή πατήθηκε το ✓)
+    if (result == true) {
+      // Αλλάζουμε αυτόματα το Tab για να δει ο χρήστης αυτό που πρόσθεσε
+      if (type == 'deadline') {
+        setState(() => _showDeadlines = true);
+      } else {
+        setState(() => _showDeadlines = false);
+      }
+      
+      // Ξαναφορτώνουμε τη λίστα
+      _refreshTaskList();
+      
+      // Εμφανίζουμε μήνυμα επιτυχίας
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("New $type added successfully!")),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2, 
-      child: Scaffold(
-        body: SafeArea(
-          child: Column(
-            children: [
-              //  HEADER (Ρυθμίσεις & AI Planner)
-              _buildHeader(context),
-              
-              // TAB BAR (Tasks / Deadlines)
-              _buildTabBar(),
-              
-              // ΠΕΡΙΕΧΟΜΕΝΟ ΤΩΝ TABS (Το σώμα της λίστας)
-              Expanded(
-                child: TabBarView(
+    // Φιλτράρισμα λίστας ανάλογα με το Tab
+    final currentList = _allTasks.where((item) {
+      return item['type'] == (_showDeadlines ? 'deadline' : 'task');
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: Colors.lightBlue.shade200, 
+      body: SafeArea(
+        child: Stack(
+          children: [
+            // Settings Icon
+            Positioned(
+              top: 10, left: 10,
+              child: IconButton(
+                icon: const Icon(Icons.settings, size: 35, color: Colors.black),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()));
+                },
+              ),
+            ),
+
+            // Main Yellow Container with List
+            Positioned(
+              top: 60, bottom: 80, left: 20, right: 20,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE082), // Κίτρινο
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
+                child: Column(
                   children: [
-                    // Tasks List
-                    _buildTaskList(tasks),
-                    // Deadlines List
-                    _buildTaskList(deadlines, isDeadline: true), 
+                    // Tabs (Tasks / Deadlines)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                      child: Row(
+                        children: [
+                          _buildTabButton('Tasks', !_showDeadlines, () {
+                            setState(() => _showDeadlines = false);
+                          }),
+                          const SizedBox(width: 20),
+                          _buildTabButton('Deadlines', _showDeadlines, () {
+                            setState(() => _showDeadlines = true);
+                          }),
+                        ],
+                      ),
+                    ),
+                    
+                    Container(height: 2, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 10)),
+
+                    // List of tasks/deadlines
+                    Expanded(
+                      child: _isLoading 
+                          ? const Center(child: CircularProgressIndicator())
+                          : currentList.isEmpty 
+                              ? Center(child: Text("No ${_showDeadlines ? 'deadlines' : 'tasks'} yet!", style: const TextStyle(color: Colors.black54)))
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(10),
+                                  itemCount: currentList.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildCustomListItem(currentList[index]);
+                                  },
+                                ),
+                    ),
                   ],
                 ),
               ),
-              
-              // AI PLANNER BUTTON 
-              _buildAIPlannerButton(),
-            ],
-          ),
+            ),
+
+            // AI Planner Button
+            Positioned(
+              bottom: 90, left: 30,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: const BorderSide(color: Colors.black, width: 1.5)
+                  ),
+                ),
+                onPressed: () {}, 
+                child: const Text("AI Planner"),
+              ),
+            ),
+
+            // Κουμπί Προσθήκης (+)
+            Positioned(
+              bottom: 90, right: 30,
+              child: GestureDetector(
+                onTap: () => _showAddOptions(context),
+                child: Container(
+                  width: 50, height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                  child: const Icon(Icons.add, color: Colors.white, size: 30),
+                ),
+              ),
+            ),
+          ],
         ),
-        
-        // Προσθήκη Νέας Εργασίας
-        floatingActionButton: FloatingActionButton(
-          heroTag: "todo_add_btn", 
-          onPressed: () {
-            _showAddTaskDialog(context);
-          },
-          backgroundColor: Colors.pink, 
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
     );
   }
 
-Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start, // Αλλάζουμε σε Start
+  Widget _buildTabButton(String text, bool isActive, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
         children: [
-          // Κουμπί Ρυθμίσεων
-          IconButton(
-            icon: const Icon(Icons.settings, size: 30),
-            onPressed: () {
-              // Πλοήγηση στα Settings
-              Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()));
-            },
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isActive ? Colors.black : Colors.black45,
+            ),
           ),
+          Container(
+            height: 3, width: 60, margin: const EdgeInsets.only(top: 4),
+            color: isActive ? Colors.blue.shade900 : Colors.transparent,
+          )
         ],
       ),
     );
   }
 
-  Widget _buildTabBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+  Widget _buildCustomListItem(Map<String, dynamic> item) {
+    final bool isCompleted = (item['is_completed'] ?? 0) == 1;
+    final String title = item['title'] ?? '';
+
+    return GestureDetector(
+      onTap: () => _toggleTaskCompletion(item['id'], item['is_completed'] ?? 0),
       child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.yellow.shade300,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black, width: 1.5),
         ),
-        child: const TabBar(
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.black54,
-          indicator: BoxDecoration(
-            color: Colors.orange, 
-            borderRadius: BorderRadius.all(Radius.circular(10)),
-          ),
-          tabs: [
-            Tab(text: 'Tasks'),
-            Tab(text: 'Deadlines'),
+        child: Row(
+          children: [
+            Container(
+              width: 20, height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.blue.shade900, width: 2),
+                color: isCompleted ? Colors.blue.shade900 : Colors.transparent,
+              ),
+              child: isCompleted ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  decoration: isCompleted ? TextDecoration.lineThrough : null,
+                  color: isCompleted ? Colors.grey : Colors.black,
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTaskList(List<String> items, {bool isDeadline = false}) {
-    // Εμφάνιση της λίστας εργασιών/προθεσμιών
-    return ListView.builder(
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        return _buildTaskItem(context, items[index], isDeadline);
-      },
-    );
-  }
-
-  Widget _buildTaskItem(BuildContext context, String title, bool isDeadline) {
-    // Προσομοίωση κάθε στοιχείου της λίστας (κυκλάκι, κείμενο, προτεραιότητα)
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-      child: Row(
-        children: [
-          // Κυκλάκι (Check/Uncheck)
-          const Icon(Icons.circle_outlined, size: 18, color: Colors.black54),
-          const SizedBox(width: 10),
-          Expanded(child: Text(title)),
-          // Προτεραιότητα (μόνο για Deadlines)
-          if (isDeadline) 
-            const Text('HIGH PRIORITY', style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAIPlannerButton() {
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      // Τοποθετούμε το κουμπί AI Planner στο κάτω αριστερά 
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton.icon(
-          style: TextButton.styleFrom(
-            backgroundColor: Colors.blue.shade100,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          ),
-          onPressed: () {
-            // Εδώ θα εμφανιστεί το AI Planner dialog 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Calling AI Planner...')),
-            );
-          },
-          icon: const Icon(Icons.psychology, color: Colors.blue),
-          label: const Text('AI Planner', style: TextStyle(color: Colors.blue)),
-        ),
-      ),
-    );
-  }
-  
-  // Dialog για επιλογή φόρμας
-  void _showAddTaskDialog(BuildContext context) {
+  void _showAddOptions(BuildContext context) {
     showModalBottomSheet(
+      backgroundColor: Colors.transparent,
       context: context,
-      builder: (BuildContext bc) {
-        return Wrap(
-          children: <Widget>[
+      builder: (c) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Color(0xFFFFE082),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border(top: BorderSide(color: Colors.black, width: 2)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.note_add, color: Colors.green),
-              title: const Text('Add New Task'),
-              onTap: () {
-                Navigator.pop(bc); 
-                Navigator.push(context, MaterialPageRoute(builder: (c) => const NewTaskScreen()));
-              },
+              title: const Text("New Task", style: TextStyle(fontWeight: FontWeight.bold)),
+              leading: const Icon(Icons.check_box_outlined, color: Colors.black),
+              onTap: () { Navigator.pop(c); _navigateToAdd('task'); },
             ),
             ListTile(
-              leading: const Icon(Icons.alarm, color: Colors.red),
-              title: const Text('Add New Deadline'),
-              onTap: () {
-                Navigator.pop(bc);
-                Navigator.push(context, MaterialPageRoute(builder: (c) => const NewDeadlineScreen()));
-              },
+              title: const Text("New Deadline", style: TextStyle(fontWeight: FontWeight.bold)),
+              leading: const Icon(Icons.timer, color: Colors.black),
+              onTap: () { Navigator.pop(c); _navigateToAdd('deadline'); },
             ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
