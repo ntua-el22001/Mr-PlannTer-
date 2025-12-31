@@ -52,7 +52,7 @@ class _TimerWrapperScreenState extends State<TimerWrapperScreen> with TickerProv
   
 
   final String _wateringModePath = 'assets/images/watering_mode.svg'; // Ποτιστήρι που ποτίζει
-  final String _fillingModePath = 'assets/images/watering_can_filling.svg'; // Ποτιστήρι που γεμίζει (με βρύση)
+  final String _fillingModePath = 'assets/images/watering_can_default.svg'; // Ποτιστήρι που γεμίζει (με βρύση)
 
   @override
   void initState() {
@@ -439,7 +439,7 @@ class _TimerWrapperScreenState extends State<TimerWrapperScreen> with TickerProv
                 height: 180, 
                 placeholderBuilder: (c) => Column(
                   children: [
-                    SvgPicture.asset('assets/images/tap_happy.svg', height: 60),
+                    SvgPicture.asset('assets/images/tap_begging.svg', height: 60),
                     SvgPicture.asset('assets/images/watering_can_default.svg', height: 100),
                   ],
                 ),

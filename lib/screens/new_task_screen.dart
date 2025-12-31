@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import '../data/database_helper.dart';
 
 class NewTaskScreen extends StatefulWidget {
@@ -73,12 +74,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     if (_formKey.currentState!.validate()) {
       try {
         final newTask = {
-          'title': _titleController.text,
-          'description': _descController.text,
+          'title': _titleController.text.trim(),
+          'description': _descController.text.trim(),
           'type': _type,
           'is_completed': 0,
-          'frequency': _type == 'task' ? _freqController.text : '',
-          'duration': int.tryParse(_durController.text) ?? 30,
+          'frequency': _type == 'task' ? _freqController.text.trim() : '',
+          'duration': int.parse(_durController.text.trim()), 
           'importance': _importance,
           'scheduled_date': _selectedDate.toIso8601String().split('T')[0],
           'scheduled_time': "${_selectedTime.hour.toString().padLeft(2,'0')}:${_selectedTime.minute.toString().padLeft(2,'0')}",
@@ -91,7 +92,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         if (mounted) Navigator.pop(context, true); 
         
       } catch (e) {
-        // Αν υπάρξει σφάλμα (π.χ. βάσης δεδομένων), εμφάνισέ το
         debugPrint("Database Error: $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -100,10 +100,10 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         }
       }
     } else {
-      // Μήνυμα αν λείπει ο τίτλος
+      // Μήνυμα αν υπάρχουν λάθη στο form
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please enter a Title!"),
+          content: Text("Please fill all required fields correctly!"),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 2),
         ),
@@ -162,10 +162,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                       Center(child: Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
                       const SizedBox(height: 15),
 
+                      // Title: Υποχρεωτικό
                       _buildCustomField(_titleController, "Title", 1, isRequired: true),
                       const SizedBox(height: 10),
 
-                      _buildCustomField(_descController, "Description", 4),
+                      // Description: Προαιρετικό
+                      _buildCustomField(_descController, "Description", 4, isRequired: false),
                       const SizedBox(height: 10),
 
                       if (isTask) ...[
@@ -173,7 +175,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                           children: [
                             Expanded(child: Text("Frequency (days/week)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))),
                             const SizedBox(width: 10),
-                            SizedBox(width: 60, child: _buildCustomField(_freqController, "", 1)),
+                            // Frequency: Υποχρεωτικό και μόνο αριθμοί
+                            SizedBox(width: 60, child: _buildCustomField(_freqController, "", 1, isRequired: true, isNumber: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -181,7 +184,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                           children: [
                             Expanded(child: Text("Duration (minutes)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue.shade900))),
                             const SizedBox(width: 10),
-                            SizedBox(width: 60, child: _buildCustomField(_durController, "", 1)),
+                            // Duration: Υποχρεωτικό και μόνο αριθμοί
+                            SizedBox(width: 60, child: _buildCustomField(_durController, "", 1, isRequired: true, isNumber: true)),
                           ],
                         ),
                         const SizedBox(height: 10),
@@ -247,7 +251,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         ),
       ),
       
-
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 20), 
@@ -257,14 +260,14 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           child: FloatingActionButton(
             onPressed: _save,
             backgroundColor: Colors.transparent, 
-            elevation: 0, // Αφαιρούμε τη σκιά
-            shape: const CircleBorder(), // Σιγουρεύουμε ότι είναι κύκλος
+            elevation: 0, 
+            shape: const CircleBorder(), 
             child: Container(
               width: 70, height: 70,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white, // Χρώμα γεμίσματος για να πιάνει το κλικ
-                border: Border.all(width: 3, color: Colors.black), // Μαύρο περίγραμμα
+                color: Colors.white, 
+                border: Border.all(width: 3, color: Colors.black), 
               ),
               child: const Icon(Icons.check, size: 40, color: Colors.black),
             ),
@@ -274,7 +277,13 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     );
   }
 
-  Widget _buildCustomField(TextEditingController controller, String hint, int lines, {bool isRequired = false}) {
+  // Widget με validation και έλεγχο αριθμών
+  Widget _buildCustomField(
+    TextEditingController controller, 
+    String hint, 
+    int lines, 
+    {bool isRequired = false, bool isNumber = false} 
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -284,8 +293,14 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       child: TextFormField(
         controller: controller,
         maxLines: lines,
+        // Αν είναι αριθμός, εμφάνισε αριθμητικό πληκτρολόγιο
+        keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+        // Αν είναι αριθμός, δέξου μόνο ψηφία (όχι γράμματα)
+        inputFormatters: isNumber ? [FilteringTextInputFormatter.digitsOnly] : [],
+        
         validator: (v) {
-          if (isRequired && (v == null || v.isEmpty)) {
+          // Έλεγχος αν είναι κενό
+          if (isRequired && (v == null || v.trim().isEmpty)) {
             return "Required"; 
           }
           return null;
@@ -295,6 +310,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
           contentPadding: const EdgeInsets.all(10),
           border: InputBorder.none,
+          errorStyle: const TextStyle(height: 0.8), 
         ),
       ),
     );

@@ -56,7 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               left: -50,
               child: Container(
                 width: 150, height: 150,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.5), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: Color.fromRGBO(255, 255, 255, 0.5), shape: BoxShape.circle),
               ),
             ),
             Positioned(
@@ -64,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               right: -50,
               child: Container(
                 width: 200, height: 200,
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.5), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: Color.fromRGBO(255, 255, 255, 0.5), shape: BoxShape.circle),
               ),
             ),
 
@@ -187,7 +187,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (newState) {
       // Trigger authentication if enabling
       final api = await GoogleCalendarService().authenticate();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar( // ignore: use_build_context_synchronously
         content: Text(api != null ? 'Connected to Google Calendar!' : 'Connection Failed'),
       ));
     }

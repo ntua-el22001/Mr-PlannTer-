@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../data/database_helper.dart';
+import '../data/task_model.dart'; 
 import 'settings_screen.dart';
 import 'new_task_screen.dart';
+import 'ai_planner_screen.dart';
 
 class TodoListScreen extends StatefulWidget {
   const TodoListScreen({super.key});
@@ -11,7 +13,7 @@ class TodoListScreen extends StatefulWidget {
 }
 
 class _TodoListScreenState extends State<TodoListScreen> {
-  List<Map<String, dynamic>> _allTasks = [];
+  List<Task> _tasks = [];
   bool _isLoading = true;
   
   // false = Tasks Tab, true = Deadlines Tab
@@ -20,16 +22,17 @@ class _TodoListScreenState extends State<TodoListScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshTaskList();
+    _refreshTaskList(); 
   }
 
-  // Φόρτωση δεδομένων από τη βάση
+  // Φόρτωση των Tasks από τη Βάση
   Future<void> _refreshTaskList() async {
     try {
       final data = await DatabaseHelper().queryAllTasks();
       if (mounted) {
         setState(() {
-          _allTasks = data;
+          // Μετατρέπουμε τα δεδομένα της βάσης (Map) σε αντικείμενα (Task)
+          _tasks = data.map((e) => Task.fromMap(e)).toList();
           _isLoading = false;
         });
       }
@@ -39,16 +42,28 @@ class _TodoListScreenState extends State<TodoListScreen> {
     }
   }
 
-  // Check/Uncheck εργασίας
-  void _toggleTaskCompletion(int id, int currentStatus) async {
-    final newStatus = currentStatus == 0 ? 1 : 0;
-    await DatabaseHelper().updateTaskCompletion(id, newStatus);
-    _refreshTaskList();
+  // Εναλλαγή κατάστασης ολοκλήρωσης Task
+  void _toggleTaskCompletion(Task task) async {
+    // Αν είναι 1 κάντο 0, αν είναι 0 κάντο 1
+    final newStatus = task.isCompleted ? 0 : 1; 
+    await DatabaseHelper().updateTaskCompletion(task.id!, newStatus);
+    _refreshTaskList(); // Ανανέωσε τη λίστα
   }
 
-  // Πλοήγηση στην οθόνη προσθήκης και αυτόματη αλλαγή TAB
+  // Διαγραφή Task
+  void _deleteTask(int id) async {
+    await DatabaseHelper().deleteTask(id);
+    _refreshTaskList(); // Ανανέωσε τη λίστα για να φύγει το σβησμένο
+    
+    if(mounted) {
+       ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Task deleted"), duration: Duration(seconds: 1)),
+      );
+    }
+  }
+
+  // Πλοήγηση στην οθόνη προσθήκης νέου Task/Deadline  
   void _navigateToAdd(String type) async {
-    // Πηγαίνουμε στη φόρμα και περιμένουμε να επιστρέψει
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -56,32 +71,25 @@ class _TodoListScreenState extends State<TodoListScreen> {
       ),
     );
 
-    // Αν επιστρέψει true (δηλαδή πατήθηκε το ✓)
+    // Αν επέστρεψε true, πρόσθεσε το νέο Task/Deadline
     if (result == true) {
-      // Αλλάζουμε αυτόματα το Tab για να δει ο χρήστης αυτό που πρόσθεσε
+      // Άλλαξε αυτόματα καρτέλα
       if (type == 'deadline') {
         setState(() => _showDeadlines = true);
       } else {
         setState(() => _showDeadlines = false);
       }
       
-      // Ξαναφορτώνουμε τη λίστα
+      // Ξαναφόρτωσε τα δεδομένα για να φανεί το καινούργιο
       _refreshTaskList();
-      
-      // Εμφανίζουμε μήνυμα επιτυχίας
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("New $type added successfully!")),
-        );
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Φιλτράρισμα λίστας ανάλογα με το Tab
-    final currentList = _allTasks.where((item) {
-      return item['type'] == (_showDeadlines ? 'deadline' : 'task');
+    // Φιλτράρισμα της λίστας ανάλογα με την επιλεγμένη καρτέλα
+    final currentList = _tasks.where((task) {
+      return task.type == (_showDeadlines ? 'deadline' : 'task');
     }).toList();
 
     return Scaffold(
@@ -100,7 +108,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
               ),
             ),
 
-            // Main Yellow Container with List
+            // Κεντρικό Κίτρινο Πλαίσιο
             Positioned(
               top: 60, bottom: 80, left: 20, right: 20,
               child: Container(
@@ -116,30 +124,31 @@ class _TodoListScreenState extends State<TodoListScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
                       child: Row(
                         children: [
-                          _buildTabButton('Tasks', !_showDeadlines, () {
-                            setState(() => _showDeadlines = false);
-                          }),
+                          _buildTabButton('Tasks', !_showDeadlines, () => setState(() => _showDeadlines = false)),
                           const SizedBox(width: 20),
-                          _buildTabButton('Deadlines', _showDeadlines, () {
-                            setState(() => _showDeadlines = true);
-                          }),
+                          _buildTabButton('Deadlines', _showDeadlines, () => setState(() => _showDeadlines = true)),
                         ],
                       ),
                     ),
                     
                     Container(height: 2, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 10)),
 
-                    // List of tasks/deadlines
+                    // Λίστα με Tasks/Deadlines
                     Expanded(
                       child: _isLoading 
                           ? const Center(child: CircularProgressIndicator())
                           : currentList.isEmpty 
-                              ? Center(child: Text("No ${_showDeadlines ? 'deadlines' : 'tasks'} yet!", style: const TextStyle(color: Colors.black54)))
+                              ? Center(
+                                  child: Text(
+                                    "No ${_showDeadlines ? 'deadlines' : 'tasks'} yet!",
+                                    style: const TextStyle(color: Colors.black54),
+                                  ),
+                                )
                               : ListView.builder(
                                   padding: const EdgeInsets.all(10),
                                   itemCount: currentList.length,
                                   itemBuilder: (context, index) {
-                                    return _buildCustomListItem(currentList[index]);
+                                    return _buildTaskItem(currentList[index]);
                                   },
                                 ),
                     ),
@@ -160,7 +169,18 @@ class _TodoListScreenState extends State<TodoListScreen> {
                     side: const BorderSide(color: Colors.black, width: 1.5)
                   ),
                 ),
-                onPressed: () {}, 
+                onPressed: () async {
+                  // Ανοίγουμε την οθόνη του AI και περιμένουμε να γυρίσει
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (c) => const AIPlannerScreen()),
+                  );
+
+                  // Αν επιστρέψει true (σημαίνει ότι προστέθηκαν tasks), κάνουμε refresh τη λίστα
+                  if (result == true) {
+                    _refreshTaskList();
+                  }
+                }, 
                 child: const Text("AI Planner"),
               ),
             ),
@@ -187,6 +207,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
     );
   }
 
+  // Βοηθητικό Widget για τα Tabs
   Widget _buildTabButton(String text, bool isActive, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -209,48 +230,67 @@ class _TodoListScreenState extends State<TodoListScreen> {
     );
   }
 
-  Widget _buildCustomListItem(Map<String, dynamic> item) {
-    final bool isCompleted = (item['is_completed'] ?? 0) == 1;
-    final String title = item['title'] ?? '';
-
-    return GestureDetector(
-      onTap: () => _toggleTaskCompletion(item['id'], item['is_completed'] ?? 0),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.black, width: 1.5),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 20, height: 20,
+  // Βοηθητικό Widget για κάθε γραμμή Task
+  Widget _buildTaskItem(Task task) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black, width: 1.5),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => _toggleTaskCompletion(task),
+            child: Container(
+              width: 24, height: 24,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.blue.shade900, width: 2),
-                color: isCompleted ? Colors.blue.shade900 : Colors.transparent,
+                color: task.isCompleted ? Colors.blue.shade900 : Colors.transparent,
               ),
-              child: isCompleted ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+              child: task.isCompleted ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  decoration: isCompleted ? TextDecoration.lineThrough : null,
-                  color: isCompleted ? Colors.grey : Colors.black,
+          ),
+          
+          const SizedBox(width: 10),
+          
+          // Τίτλος και Ημερομηνία
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  task.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                    color: task.isCompleted ? Colors.grey : Colors.black,
+                  ),
                 ),
-              ),
+                // Εμφάνιση ημερομηνίας και ώρας
+                Text(
+                  "${task.scheduledDate} @ ${task.scheduledTime}",
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // Κουμπί Διαγραφής (Trash)
+          IconButton(
+            icon: const Icon(Icons.delete, color: Colors.red),
+            onPressed: () => _deleteTask(task.id!), // Καλεί τη διαγραφή
+          ),
+        ],
       ),
     );
   }
 
+  // Το μενού επιλογής (Task ή Deadline)
   void _showAddOptions(BuildContext context) {
     showModalBottomSheet(
       backgroundColor: Colors.transparent,
